@@ -17,8 +17,8 @@ brew "neovim"
 brew "neofetch"
 # Platform built on V8 to build network applications
 brew "node"
-# Python version management
-brew "pyenv"
+# Python package and project manager
+brew "uv"
 # File browser
 brew "ranger"
 # Search tool like grep and The Silver Searcher

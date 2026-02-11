@@ -22,7 +22,7 @@ dotfiles/
 ├── zsh/                     # Zsh shell configuration
 │   ├── .zshrc               # Minimal loader
 │   ├── .zshenv              # Env vars, theme settings, PATH
-│   ├── custom.zsh           # Shell init (pyenv, starship, fzf, zoxide, vi-mode)
+│   ├── custom.zsh           # Shell init (uv, starship, fzf, zoxide, vi-mode)
 │   ├── aliases.zsh          # 40+ aliases (git, AI tools, eza, navigation)
 │   └── git-completion.*     # Git tab completion
 ├── tmux/                    # Tmux configuration

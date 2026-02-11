@@ -2,17 +2,8 @@
 eval "$(/opt/homebrew/bin/brew shellenv)"
 export HOMEBREW_NO_AUTO_UPDATE=1
 
-# Pipenv
-export PIPENV_VENV_IN_PROJECT=1
-
-# Pyenv
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)" # Initialize pyenv when a new shell spawns
-
-# Poetry
-export PATH="$HOME/.local/bin:$PATH"
-# alias poetry_shell='. "$(dirname $(poetry run which python))/activate"'
+# uv (Python package manager)
+eval "$(uv generate-shell-completion zsh)"
 
 # Starship
 export STARSHIP_CONFIG="$HOME/.config/starship/starship.toml"
@@ -134,41 +125,32 @@ autoload edit-command-line
 zle -N edit-command-line
 bindkey -M vicmd v edit-command-line
 
-create_ds_project() {
-  echo "Project name:"
-  read proj
-  mkdir -p "$proj"/{notebooks,src,data/{raw,interim,processed},reports,env,tests}
-  cd "$proj" || exit
+# Create a Python venv with uv and register a Jupyter kernel
+mkpy() {
+  local pyv="${1:-3.12}"
+  local proj="${2:-$(basename $PWD)}"
 
-  echo " Which Python version do you want to use?"
-  read pyv
-
-  # Install python version if missing
-  if ! pyenv versions --bare | grep -q "$pyv"; then
-    echo "Installing Python $pyv with pyenv..."
-    pyenv install "$pyv"
-  fi
-
-  pyenv local "$pyv"
-
-  # Setup venv
-  python -m venv .venv
+  uv venv --python "$pyv"
   source .venv/bin/activate
 
-  python -m pip install --upgrade pip
+  uv pip install ipykernel ruff
+  python -m ipykernel install --user --name="$proj" --display-name="$proj (Python $pyv)"
 
-  echo "Do you want to install Jupyter + pandas + numpy + matplotlib? (y/n)"
-  read yn
-  if [ "$yn" = "y" ]; then
-    python -m pip install jupyterlab ipykernel jupytext nbdime pandas numpy matplotlib
-    python -m ipykernel install --user --name "$proj" --display-name "$proj ($pyv)"
-  fi
+  echo "Environment ready: Python $pyv, kernel '$proj' registered"
+}
 
-  # Git init
+# Scaffold a data science project with uv
+mkds() {
+  local pyv="${1:-3.12}"
+  local proj="${2:-$(basename $PWD)}"
+
+  mkdir -p notebooks src data/{raw,interim,processed} reports tests
+  mkpy "$pyv" "$proj"
+  uv pip install jupyterlab pandas numpy matplotlib
+
   git init -q
   echo -e ".venv/\n__pycache__/\n*.pyc\ndata/raw/\ndata/interim/\n.ipynb_checkpoints/" > .gitignore
-  git add .
-  git commit -m "Initial commit: project skeleton with Python $pyv" >/dev/null
+  git add . && git commit -m "Initial commit: project skeleton with Python $pyv" >/dev/null
 
-  echo "Project $proj created with Python $pyv"
+  echo "Data science project '$proj' ready"
 }

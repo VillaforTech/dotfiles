@@ -32,14 +32,14 @@ All tools read theme env vars from `zsh/.zshenv` — the single source of truth:
 - **Plugins:** `lua/plugins/` — one file per plugin (lazy.nvim spec format), ~27 plugin files
 - **Themes:** `lua/plugins/themes/` — isolated theme specs (nord.lua, onedark.lua) with transparency toggle (`<leader>bg`)
 - **Custom tools:** `lua/tools/sql-runner.lua` — multi-backend SQL execution with visual mode support
-- **LSPs configured via Mason:** lua_ls, pylsp, ruff, jsonls, sqlls, terraformls, and others in `plugins/lsp.lua`
+- **LSPs configured via Mason:** lua_ls, basedpyright, ruff, jsonls, sqlls, terraformls, and others in `plugins/lsp.lua`
 - Plugins auto-install on first launch; lock file at `nvim/lazy-lock.json`
 
 ### Zsh (`zsh/`)
 
 - `.zshrc` is a minimal loader that sources `custom.zsh`, `aliases.zsh`, and optional `work.zsh`
 - `.zshenv` sets XDG dirs, theme vars, EDITOR=nvim, build flags, and loads `~/.env` secrets
-- `custom.zsh` initializes: pyenv, poetry, starship, fzf+bat, zoxide, zsh-syntax-highlighting, zsh-autosuggestions, vi-mode with cursor shape switching
+- `custom.zsh` initializes: uv, starship, fzf+bat, zoxide, zsh-syntax-highlighting, zsh-autosuggestions, vi-mode with cursor shape switching
 - `aliases.zsh` has 40+ git aliases (many fzf-enhanced), Claude Code shortcuts, eza-based ls, `quick_commit()` that extracts ticket IDs from branch names
 
 ### Tmux (`tmux/`)

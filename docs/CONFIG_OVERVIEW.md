@@ -30,8 +30,7 @@ Shell configuration split into focused files, loaded by a minimal `.zshrc`.
 - `.zshenv` — Sets XDG directories, theme env vars (`NVIM_THEME`, `TMUX_THEME`, etc.), `EDITOR=nvim`, build flags (`LDFLAGS`, `CPPFLAGS`), locale, and loads `~/.env` secrets and `~/.cargo/env`
 - `custom.zsh` — Shell initialization:
   - **Homebrew** setup at `/opt/homebrew`
-  - **Pyenv** for Python version management
-  - **Poetry** in PATH
+  - **uv** shell completion for Python package management
   - **Starship** prompt init with theme palette switching
   - **Git completion** via custom zstyle + fpath
   - **FZF** with bat preview, hidden file search via ripgrep
@@ -40,14 +39,15 @@ Shell configuration split into focused files, loaded by a minimal `.zshrc`.
   - **zsh-syntax-highlighting** with path underline disabled
   - **zsh-autosuggestions**
   - **Vi-mode** with cursor shape switching (beam in insert mode, block in normal mode), system clipboard yank, and `v` in normal mode to edit command in Neovim
-  - **`create_ds_project()`** — Interactive data science project scaffolding with pyenv, venv, and optional Jupyter
+  - **`mkpy()`** — Create a Python venv with uv and register a Jupyter kernel
+  - **`mkds()`** — Scaffold a data science project with uv (directories, venv, Jupyter, pandas, git init)
 - `aliases.zsh` — 40+ aliases organized by category:
   - **System:** `shutdown`, `restart`, `sleep`, `c` (clear), `e` (exit)
   - **AI tools:** `cc` (claude), `cx` (codex auto), `cxr` (codex readonly), `cxn` (codex net), `gmc` (gemini sandbox)
   - **Git (30+ aliases):** Standard shortcuts (`ga`, `gc`, `gp`, `gco`, `gb`, `gd`, `gl`, etc.)
   - **FZF-enhanced git:** `gafzf` (add), `grmfzf` (rm), `grfzf` (restore), `grsfzf` (restore staged), `gcofzf` (checkout branch)
   - **`quick_commit()`** — Commits with ticket ID extracted from branch name (e.g., branch `PROJ-123-feature` → commit `PROJ-123: message`). `gqc` alias, `gqcp` to commit and push.
-  - **Neovim:** `vi`/`v` → poetry-aware nvim launcher (runs `poetry run nvim` if in a Poetry project)
+  - **Neovim:** `vi`/`v` → nvim
   - **Navigation:** `ls` → eza with icons, `r` → ranger, `lg` → lazygit, `lv`/`lv2`/`lv3`/`lv4` → go up directories
 - `git-completion.bash` / `git-completion.zsh` — Git tab completion support
 
@@ -103,12 +103,11 @@ Lua-based configuration using lazy.nvim as the plugin manager.
 | mason.nvim | (dependency) | LSP/tool installer |
 | nvim-cmp | `autocompletion.lua` | Autocompletion with LSP, snippet, buffer, and path sources |
 | LuaSnip | (dependency) | Snippet engine with friendly-snippets |
-| conform.nvim | `conform.lua` | Format on save: stylua (Lua), ruff_format (Python), prettier (JS/TS/JSON/YAML/MD/HTML), shfmt (Bash), terraform_fmt |
+| conform.nvim | `conform.lua` | Format on save: stylua (Lua), ruff_fix + ruff_format (Python), prettier (JS/TS/JSON/YAML/MD/HTML), shfmt (Bash), terraform_fmt |
 | nvim-lint | `lint.lua` | Async linting: eslint_d (JS/TS), checkmake (Makefiles) |
-| none-ls.nvim | `none-ls.lua` | Additional formatting/linting via null-ls (prettier, stylua, shfmt, ruff, checkmake) |
 | fidget.nvim | (dependency) | LSP progress notifications |
 
-**Configured LSP servers:** `lua_ls`, `pylsp`, `ruff`, `jsonls`, `sqlls`, `terraformls`, `yamlls`, `bashls`, `dockerls`, `docker_compose_language_service`, `html`, `rust_analyzer` (with clippy as check command)
+**Configured LSP servers:** `lua_ls`, `basedpyright`, `ruff`, `jsonls`, `sqlls`, `terraformls`, `yamlls`, `bashls`, `dockerls`, `docker_compose_language_service`, `html`, `rust_analyzer` (with clippy as check command)
 
 **Git:**
 | Plugin | File | Description |

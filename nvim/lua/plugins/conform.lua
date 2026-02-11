@@ -13,7 +13,7 @@ return {
       -- Conform can also run multiple formatters sequentially
       -- python = { "isort", "black" },
       -- Use a sub-list to run only the first available formatter
-      python = { 'ruff_format' },
+      python = { 'ruff_fix', 'ruff_format' },
       javascript = { 'prettier' },
       typescript = { 'prettier' },
       javascriptreact = { 'prettier' },
