@@ -3,3 +3,5 @@
 wezterm/*.jpg
 wezterm/*.png
 work.zsh
+*.log
+.nvimlog
