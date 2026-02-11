@@ -206,10 +206,27 @@ return {
       -- cssls = {},
       -- ltex = {},
       -- texlab = {},
+      rust_analyzer = {
+        settings = {
+          ['rust-analyzer'] = {
+            cargo = {
+              allFeatures = true,
+            },
+            procMacro = {
+              enable = true,
+            },
+            check = {
+              command = 'clippy',
+            },
+          },
+        },
+      },
     }
 
     -- Ensure the servers and tools above are installed
-    local ensure_installed = vim.tbl_keys(servers or {})
+    local ensure_installed = vim.tbl_filter(function(s)
+      return s ~= 'rust_analyzer'
+    end, vim.tbl_keys(servers or {}))
     vim.list_extend(ensure_installed, {
       'stylua', -- Used to format Lua code
     })

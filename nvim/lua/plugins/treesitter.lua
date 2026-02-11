@@ -32,6 +32,7 @@ return {
         'markdown',
         'markdown_inline',
         'bash',
+        'rust',
         'tsx',
         'css',
         'html',
