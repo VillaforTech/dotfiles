@@ -20,7 +20,7 @@ Long-lived development credentials use login Keychain services named
 `dev.env.<VARIABLE>`. Load only the variables a subprocess needs:
 
 ```bash
-with-dev-secrets GITHUB_PERSONAL_ACCESS_TOKEN -- gh api user
+with-dev-secrets ANTHROPIC_API_KEY -- ./run-anthropic-task
 with-dev-secrets GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET -- ./run-oauth-task
 ```
 
