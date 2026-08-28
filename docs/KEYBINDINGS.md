@@ -15,6 +15,23 @@
 | `Ctrl+l` | Navigate right | `vim-tmux-navigator.lua` |
 | `Ctrl+\` | Navigate to previous pane | `vim-tmux-navigator.lua` |
 
+## Rectangle window management
+
+*Source: `scripts/configure-rectangle` and `macos/rectangle-actions.txt`.*
+
+| Key | Action |
+| :--- | :--- |
+| `Control+Option+Left` | Left half |
+| `Control+Option+Right` | Right half |
+| `Control+Option+Up` | Top half |
+| `Control+Option+Down` | Bottom half |
+| `Control+Option+Return` | Maximize |
+| `Control+Option+Command+Left` | Move to previous display |
+| `Control+Option+Command+Right` | Move to next display |
+
+All other Rectangle actions are explicitly unbound. Karabiner/Hyper is not part
+of v1.
+
 ## 2. Neovim Core
 
 *Source: `lua/core/keymaps.lua`*
@@ -110,7 +127,7 @@
 | Key | Action |
 | :--- | :--- |
 | `<leader>ss` | Save session to `.session.vim` |
-| `<leader>sl` | Load session from `.session.vim` |
+| `<leader>sl` | Explicitly trust-check and load `.session.vim` |
 
 ## 3. Neovim Telescope
 
@@ -344,9 +361,10 @@ Gitsigns uses its default keybindings. The plugin provides git hunk signs in the
 
 | Key | Action |
 | :--- | :--- |
-| `<C-Space>` | Init / expand selection |
-| `<C-s>` | Expand to scope |
-| `<M-Space>` | Shrink selection |
+| `<leader>is` | Initialize selection |
+| `<leader>in` | Expand to next node |
+| `<leader>ic` | Expand to scope |
+| `<leader>id` | Shrink selection |
 
 ## 10. Neovim Editing
 
@@ -417,6 +435,7 @@ Gitsigns uses its default keybindings. The plugin provides git hunk signs in the
 | :--- | :--- |
 | `<Pre> r` | Reload tmux config |
 | `<Pre> I` | Install TPM plugins |
+| `<Pre> S` | Toggle pane-content capture for sensitive work |
 
 ## 12. Zsh / Shell
 
@@ -435,11 +454,11 @@ Gitsigns uses its default keybindings. The plugin provides git hunk signs in the
 
 | Key / Command | Action |
 | :--- | :--- |
-| `Ctrl+T` | FZF file search (with bat preview) |
+| `Ctrl+T` | FZF file search (bat preview when available) |
 | `Ctrl+R` | FZF command history search |
 | `Alt+C` (or `ç`) | FZF cd to directory |
-| `fd` | Interactive cd to subdirectory via fzf |
-| `fh` | Search and execute from command history |
+| `cdf` | Interactive cd to subdirectory via the fd CLI and fzf |
+| `fh` | Search command history and place the choice on the edit buffer |
 
 ### Zoxide
 

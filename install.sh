@@ -8,7 +8,7 @@
 
 info "Dotfiles intallation initialized..."
 read -p "Install apps? [y/n] " install_apps
-read -p "Overwrite existing dotfiles? [y/n] " overwrite_dotfiles
+read -p "Back up and link conflicting existing dotfiles? [y/n] " backup_dotfiles
 
 if [[ "$install_apps" == "y" ]]; then
     printf "\n"
@@ -50,11 +50,16 @@ info "===================="
 info "Symbolic Links"
 info "===================="
 
-chmod +x ./scripts/symlinks.sh
-if [[ "$overwrite_dotfiles" == "y" ]]; then
-    warning "Deleting existing dotfiles..."
-    ./scripts/symlinks.sh --delete --include-files
+if [[ "$backup_dotfiles" == "y" ]]; then
+    ./scripts/link-config --apply --backup-existing
+else
+    ./scripts/link-config --apply
 fi
-./scripts/symlinks.sh --create
+
+git config --local core.hooksPath .githooks
+
+if [[ -d /Applications/Rectangle.app ]]; then
+    ./scripts/configure-rectangle
+fi
 
 success "Dotfiles set up successfully."

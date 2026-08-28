@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(git -C "$hook_dir/.." rev-parse --show-toplevel)"
+remote_name="${1:-origin}"
+zero_sha='0000000000000000000000000000000000000000'
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$local_sha" == "$zero_sha" ]]; then
+    continue
+  fi
+
+  if [[ "$remote_sha" == "$zero_sha" ]]; then
+    commits="$(git rev-list "$local_sha" --not --remotes="$remote_name")"
+    if [[ -z "$commits" ]]; then
+      commits="$local_sha"
+    fi
+  else
+    commits="$(git rev-list "$remote_sha..$local_sha")"
+  fi
+
+  while IFS= read -r commit; do
+    if [[ -n "$commit" ]]; then
+      "$repo_root/scripts/repo-guard" --tree "$commit"
+    fi
+  done <<< "$commits"
+done

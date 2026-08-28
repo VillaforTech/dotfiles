@@ -1,15 +1,15 @@
 # System
 alias shutdown='sudo shutdown now'
 alias restart='sudo reboot'
-alias suspend='sudo pm-suspend'
+alias suspend='pmset sleepnow'
 alias sleep='pmset sleepnow'
 alias c='clear'
 alias e='exit'
 
 alias cc='claude'
-alias cx='codex --profile auto'
-alias cxr='codex --profile readonly'
-alias cxn='codex --profile net'
+alias cx='codex'
+alias cxr='codex --sandbox read-only --ask-for-approval never'
+alias cxo='codex --sandbox danger-full-access --ask-for-approval on-request'
 alias gmc='gemini --sandbox'
 
 # Git
@@ -22,11 +22,11 @@ alias grsfzf='git diff --name-only | fzf -m --print0 | xargs -0 -o -t git restor
 alias gf='git fetch'
 alias gs='git status'
 alias gss='git status -s'
-alias gup='git fetch && git rebase'
+alias gup='git pull --ff-only'
 alias gtd='git tag --delete'
-alias gtdr='git tag --delete origin'
-alias glo='git pull origin'
-alias gl='git pull'
+alias gtdr='git push origin --delete'
+alias glo='git pull --ff-only origin'
+alias gl='git pull --ff-only'
 alias gb='git branch '
 alias gbr='git branch -r'
 alias gd='git diff'
@@ -42,8 +42,8 @@ alias gpo='git push origin'
 alias ggpush='git push origin $(current_branch)'
 alias gc='git commit -v'
 alias gcm='git commit -m'
-alias gcmnv='git commit --no-verify -m'
-alias gcanenv='git commit --amend --no-edit --no-verify'
+alias gcmnv='git commit -m'
+alias gcanenv='git commit --amend --no-edit'
 # Function to commit with ticket ID from current branch, with optional push
 quick_commit() {
   local branch_name ticket_id commit_message push_flag
@@ -55,9 +55,9 @@ quick_commit() {
   if [[ "$push_flag" == "push" ]]; then
     # Remove 'push' from the commit message
     commit_message="$ticket_id: ${*:2}" # take all positional parameters starting from the second one
-    git commit --no-verify -m "$commit_message" && git push
+    git commit -m "$commit_message" && git push
   else
-    git commit --no-verify -m "$commit_message"
+    git commit -m "$commit_message"
   fi
 }
 
@@ -73,7 +73,7 @@ alias doc="$HOME/Documents"
 alias dow="$HOME/Downloads"
 
 # Ranger
-alias r=". ranger"
+alias r="ranger"
 
 # Better ls
 alias ls="eza --all --icons=always"

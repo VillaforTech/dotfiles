@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(git -C "$script_dir/.." rev-parse --show-toplevel)"
+actions_file="$repo_root/macos/rectangle-actions.txt"
+domain=com.knollsoft.Rectangle
+
+[[ -d /Applications/Rectangle.app ]] || {
+  printf 'configure-rectangle: /Applications/Rectangle.app is not installed\n' >&2
+  exit 1
+}
+
+if pgrep -x Rectangle >/dev/null 2>&1; then
+  printf 'configure-rectangle: quit Rectangle before changing its preferences\n' >&2
+  exit 1
+fi
+
+[[ -f "$actions_file" ]] || {
+  printf 'configure-rectangle: missing action inventory: %s\n' "$actions_file" >&2
+  exit 1
+}
+
+action_count="$(wc -l < "$actions_file" | tr -d ' ')"
+unique_count="$(sort -u "$actions_file" | wc -l | tr -d ' ')"
+[[ "$action_count" -eq 127 && "$unique_count" -eq 127 ]] || {
+  printf 'configure-rectangle: expected 127 unique actions\n' >&2
+  exit 1
+}
+
+while IFS= read -r action; do
+  defaults write "$domain" "$action" -dict
+done < "$actions_file"
+
+defaults write "$domain" leftHalf -dict keyCode -int 123 modifierFlags -int 786432
+defaults write "$domain" rightHalf -dict keyCode -int 124 modifierFlags -int 786432
+defaults write "$domain" topHalf -dict keyCode -int 126 modifierFlags -int 786432
+defaults write "$domain" bottomHalf -dict keyCode -int 125 modifierFlags -int 786432
+defaults write "$domain" maximize -dict keyCode -int 36 modifierFlags -int 786432
+defaults write "$domain" previousDisplay -dict keyCode -int 123 modifierFlags -int 1835008
+defaults write "$domain" nextDisplay -dict keyCode -int 124 modifierFlags -int 1835008
+defaults write "$domain" subsequentExecutionMode -int 2
+defaults write "$domain" launchOnLogin -bool true
+defaults write "$domain" windowSnapping -bool true
+defaults write "$domain" hideMenubarIcon -bool false
+
+shortcut_count="$(defaults export "$domain" - 2>/dev/null | plutil -convert json -o - - | jq '[to_entries[] | select(.value | type == "object") | select(.value | length > 0)] | length')"
+[[ "$shortcut_count" -eq 7 ]] || {
+  printf 'configure-rectangle: expected seven active shortcuts, found %s\n' "$shortcut_count" >&2
+  exit 1
+}
+
+printf 'configure-rectangle: PASS; launch Rectangle and verify Accessibility/login-item state\n'

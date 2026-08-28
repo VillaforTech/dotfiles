@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+direct_requirements="$repo_root/python/jupyter-tool.in"
+lock_file="$repo_root/python/jupyter-tool.lock"
+python_version="3.13.11"
+
+require_pin() {
+  local package="$1"
+  local source_file="$2"
+  local version
+
+  version="$(sed -n "s/^${package}==//p" "$source_file")"
+  if [[ -z "$version" ]] || [[ "$version" == *$'\n'* ]]; then
+    printf 'Expected one exact %s pin in %s\n' "$package" "$source_file" >&2
+    exit 1
+  fi
+  printf '%s\n' "$version"
+}
+
+command -v uv >/dev/null 2>&1 || {
+  printf '%s\n' 'uv is required on PATH' >&2
+  exit 1
+}
+
+for required_file in "$direct_requirements" "$lock_file"; do
+  [[ -r "$required_file" ]] || {
+    printf 'Missing required manifest: %s\n' "$required_file" >&2
+    exit 1
+  }
+done
+
+jupyterlab_version="$(require_pin jupyterlab "$direct_requirements")"
+jupyterlab_vim_version="$(require_pin jupyterlab-vim "$direct_requirements")"
+jupytext_version="$(require_pin jupytext "$direct_requirements")"
+nbdime_version="$(require_pin nbdime "$direct_requirements")"
+jupyter_core_version="$(require_pin jupyter-core "$lock_file")"
+
+uv tool install \
+  --force \
+  --managed-python \
+  --python "$python_version" \
+  --constraints "$lock_file" \
+  --with "jupyterlab-vim==$jupyterlab_vim_version" \
+  --with "jupytext==$jupytext_version" \
+  --with "nbdime==$nbdime_version" \
+  --with-executables-from "jupyter-core==$jupyter_core_version" \
+  --with-executables-from "jupytext==$jupytext_version" \
+  --with-executables-from "nbdime==$nbdime_version" \
+  "jupyterlab==$jupyterlab_version"

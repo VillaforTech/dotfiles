@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -eu
+
+resurrect_dir="${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect"
+
+[ -d "$resurrect_dir" ] || exit 0
+
+chmod 700 "$resurrect_dir"
+find "$resurrect_dir" -type d -exec chmod 700 {} +
+find "$resurrect_dir" -type f -exec chmod 600 {} +

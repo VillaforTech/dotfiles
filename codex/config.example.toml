@@ -1,0 +1,13 @@
+# Portable user-base example. Keep the live ~/.codex/config.toml private because
+# it contains machine paths, plugin state, connector definitions, and exact
+# trusted-project registrations.
+model = "gpt-5.6-sol"
+model_reasoning_effort = "ultra"
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+writable_roots = []
+exclude_tmpdir_env_var = false
+exclude_slash_tmp = false
+network_access = true

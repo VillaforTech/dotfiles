@@ -1,19 +1,23 @@
-# Homebrew
-eval "$(/opt/homebrew/bin/brew shellenv)"
+# Homebrew behavior (PATH initialization belongs to .zprofile)
 export HOMEBREW_NO_AUTO_UPDATE=1
-
-# uv (Python package manager)
-eval "$(uv generate-shell-completion zsh)"
 
 # Starship
 export STARSHIP_CONFIG="$HOME/.config/starship/starship.toml"
-eval "$(starship init zsh)"
-starship config palette $STARSHIP_THEME
+if (( $+commands[starship] )); then
+  eval "$(starship init zsh)"
+fi
 
 # Load Git completion
-zstyle ':completion:*:*:git:*' script $HOME/.config/zsh/git-completion.bash
-fpath=($HOME/.config/zsh $fpath)
-autoload -Uz compinit && compinit
+zstyle ':completion:*:*:git:*' script "$HOME/.config/zsh/git-completion.bash"
+fpath=("$HOME/.config/zsh" $fpath)
+autoload -Uz compinit
+mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
+compinit -d "${XDG_CACHE_HOME:-$HOME/.cache}/zsh/zcompdump"
+
+# uv completion requires compinit/compdef to exist first.
+if (( $+commands[uv] )); then
+  eval "$(uv generate-shell-completion zsh)"
+fi
 
 # Redshift
 export ODBCINI="$HOME/.odbc.ini"
@@ -24,24 +28,27 @@ export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:/usr/local/lib"
 # fzf
 [ -f "$HOME/.fzf.zsh" ] && source "$HOME/.fzf.zsh"
 
-export FZF_CTRL_T_OPTS="
-  --preview 'bat -n --color=always {}'
-  --bind 'ctrl-/:change-preview-window(down|hidden|)'"
-export FZF_DEFAULT_COMMAND='rg --hidden -l ""' # Include hidden files
+if (( $+commands[bat] )); then
+  export FZF_CTRL_T_OPTS="--preview 'bat -n --color=always {}' --bind 'ctrl-/:change-preview-window(down|hidden|)'"
+else
+  export FZF_CTRL_T_OPTS="--preview 'sed -n 1,200p {}' --bind 'ctrl-/:change-preview-window(down|hidden|)'"
+fi
+export FZF_DEFAULT_COMMAND='fd --type f --hidden --exclude .git'
 
 bindkey "ç" fzf-cd-widget # Fix for ALT+C on Mac
 
-# fd - cd to selected directory
-fd() {
+# cdf - cd to a selected directory without shadowing the fd executable
+cdf() {
   local dir
-  dir=$(find ${1:-.} -path '*/\.*' -prune \
-                  -o -type d -print 2> /dev/null | fzf +m) &&
+  dir=$(fd --type d --hidden --exclude .git . "${1:-.}" | fzf +m) &&
   cd "$dir"
 }
 
-# fh - search in your command history and execute selected command
+# fh - search command history and put the selection on the edit buffer
 fh() {
-  eval $( ([ -n "$ZSH_NAME" ] && fc -l 1 || history) | fzf +s --tac | sed 's/ *[0-9]* *//')
+  local selected
+  selected=$(fc -rl 1 | sed 's/^[[:space:]]*[0-9]*[[:space:]]*//' | fzf +s) || return
+  print -z -- "$selected"
 }
 
 # Tmux
@@ -63,10 +70,19 @@ fh() {
 # fi
 
 # zoxide - a better cd command
-eval "$(zoxide init zsh)"
+if (( $+commands[zoxide] )); then
+  eval "$(zoxide init zsh)"
+fi
+
+# Project-scoped environment loading. Each project still requires its one-time
+# direnv allow decision.
+if (( $+commands[direnv] )); then
+  eval "$(direnv hook zsh)"
+fi
 
 # Activate syntax highlighting
-source $(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+[[ -r /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] &&
+  source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 # Disable underline
 (( ${+ZSH_HIGHLIGHT_STYLES} )) || typeset -A ZSH_HIGHLIGHT_STYLES
 ZSH_HIGHLIGHT_STYLES[path]=none
@@ -77,8 +93,9 @@ ZSH_HIGHLIGHT_STYLES[path_prefix]=none
 # export ZSH_HIGHLIGHT_STYLES[arg0]=fg=blue
 
 # Activate autosuggestions
-source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
-
+[[ -r /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] &&
+  source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+# Clickup
 # Vi mode
 # ANSI cursor escape codes:
 # \e[0 q: Reset to the default cursor style.
@@ -112,13 +129,13 @@ zle -N zle-line-init
 echo -ne '\e[6 q' # Use beam shape cursor on startup
 
 # Yank to the system clipboard
-function vi-yank-xclip {
+function vi-yank-clipboard {
   zle vi-yank
   echo "$CUTBUFFER" | pbcopy -i
 }
 
-zle -N vi-yank-xclip
-bindkey -M vicmd 'y' vi-yank-xclip
+zle -N vi-yank-clipboard
+bindkey -M vicmd 'y' vi-yank-clipboard
 
 # Press 'v' in normal mode to launch Vim with current line
 autoload edit-command-line
@@ -149,8 +166,9 @@ mkds() {
   uv pip install jupyterlab pandas numpy matplotlib
 
   git init -q
-  echo -e ".venv/\n__pycache__/\n*.pyc\ndata/raw/\ndata/interim/\n.ipynb_checkpoints/" > .gitignore
-  git add . && git commit -m "Initial commit: project skeleton with Python $pyv" >/dev/null
+  if [[ ! -e .gitignore ]]; then
+    printf '%s\n' .venv/ __pycache__/ '*.pyc' data/raw/ data/interim/ .ipynb_checkpoints/ > .gitignore
+  fi
 
-  echo "Data science project '$proj' ready"
+  echo "Data science project '$proj' ready; review files before the first commit"
 }

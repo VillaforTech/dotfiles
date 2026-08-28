@@ -1,0 +1,8 @@
+# Copy this file to .codex/config.toml only in an exact, user-owned repository.
+# A project may narrow or specialize the user base; it cannot broaden host access.
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = true
+writable_roots = []

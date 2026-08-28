@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-v1-test.XXXXXX")"
+tmux_socket="dotfiles-v1-test-$$"
+work_socket="dotfiles-work-test-$$"
+
+cleanup() {
+  tmux -L "$tmux_socket" kill-server >/dev/null 2>&1 || true
+  tmux -L "$work_socket" kill-server >/dev/null 2>&1 || true
+  rm -rf "$fixture_root"
+}
+trap cleanup EXIT
+
+pass() {
+  printf 'PASS %s\n' "$1"
+}
+
+bash -n \
+  "$repo_root/install.sh" \
+  "$repo_root/scripts/install-jupyter-tool" \
+  "$repo_root/scripts/configure-rectangle" \
+  "$repo_root/scripts/link-config" \
+  "$repo_root/scripts/repo-guard" \
+  "$repo_root/scripts/symlinks.sh" \
+  "$repo_root/scripts/tmux-secure-resurrect" \
+  "$repo_root/scripts/with-dev-secrets" \
+  "$repo_root/scripts/work"
+bash -n "$repo_root/.githooks/pre-commit" "$repo_root/.githooks/pre-push"
+zsh -n \
+  "$repo_root/zsh/.zshenv" \
+  "$repo_root/zsh/.zprofile" \
+  "$repo_root/zsh/.zshrc" \
+  "$repo_root/zsh/custom.zsh" \
+  "$repo_root/zsh/aliases.zsh"
+pass "shell syntax"
+
+test "$(wc -l < "$repo_root/macos/rectangle-actions.txt" | tr -d ' ')" = "127"
+test "$(sort -u "$repo_root/macos/rectangle-actions.txt" | wc -l | tr -d ' ')" = "127"
+test "$(grep -c '^defaults write .* -dict keyCode' "$repo_root/scripts/configure-rectangle")" = "7"
+for action in leftHalf rightHalf topHalf bottomHalf maximize previousDisplay nextDisplay; do
+  grep -E "^defaults write .* ${action} -dict keyCode" "$repo_root/scripts/configure-rectangle" >/dev/null
+done
+pass "Rectangle preference manifest"
+
+for package in jupyterlab jupyterlab-vim jupytext nbdime; do
+  direct_pin="$(sed -n "s/^${package}==//p" "$repo_root/python/jupyter-tool.in")"
+  test -n "$direct_pin"
+  test "$(printf '%s\n' "$direct_pin" | wc -l | tr -d ' ')" = "1"
+  grep -Fx "${package}==${direct_pin}" "$repo_root/python/jupyter-tool.lock" >/dev/null
+done
+grep -E '^jupyter-core==[0-9]' "$repo_root/python/jupyter-tool.lock" >/dev/null
+pass "Jupyter manifest pins"
+
+fixture_home="$fixture_root/home"
+mkdir -p "$fixture_home"
+HOME="$fixture_home" XDG_STATE_HOME="$fixture_home/.local/state" \
+  "$repo_root/scripts/link-config" --apply >/dev/null
+test -L "$fixture_home/.zshrc"
+test "$(readlink "$fixture_home/.zshrc")" = "$repo_root/zsh/.zshrc"
+
+printf '%s\n' 'existing' > "$fixture_home/conflict"
+printf '%s\n' '${DOTFILES_ROOT}/README.md:${HOME}/conflict' > "$fixture_root/conflict.conf"
+if HOME="$fixture_home" "$repo_root/scripts/link-config" --apply --config "$fixture_root/conflict.conf" >/dev/null 2>&1; then
+  printf '%s\n' 'linker replaced a conflict without backup authorization' >&2
+  exit 1
+fi
+test "$(sed -n '1p' "$fixture_home/conflict")" = "existing"
+HOME="$fixture_home" XDG_STATE_HOME="$fixture_home/.local/state" DOTFILES_LINK_BACKUP_STAMP=test \
+  "$repo_root/scripts/link-config" --apply --backup-existing --config "$fixture_root/conflict.conf" >/dev/null
+test -L "$fixture_home/conflict"
+test -f "$fixture_home/.local/state/dotfiles/link-backups/test/conflict"
+pass "safe linker refusal and backup"
+
+path_result="$(env -i HOME="$fixture_home" PATH=/usr/bin:/bin /bin/zsh -dfc \
+  "source '$repo_root/zsh/.zprofile'; print -l -- \$path")"
+test "$(printf '%s\n' "$path_result" | sort | uniq -d | wc -l | tr -d ' ')" = "0"
+printf '%s\n' "$path_result" | grep -Fx "$fixture_home/.local/bin" >/dev/null
+pass "login PATH uniqueness"
+
+shell_stderr="$fixture_root/login-shell.stderr"
+HOME="$fixture_home" TERM=xterm-256color /bin/zsh -lic 'true' >/dev/null 2>"$shell_stderr"
+if grep -E 'command not found: compdef|not found: compdef' "$shell_stderr" >/dev/null; then
+  printf '%s\n' 'interactive shell initialized completion before compdef' >&2
+  exit 1
+fi
+pass "interactive completion order"
+
+printf '%s\n' '#!/bin/sh' 'printf fixture-value' > "$fixture_root/fake-security"
+chmod 700 "$fixture_root/fake-security"
+env -u TEST_DEV_SECRET TEST_DEV_SECRET=stale \
+  DEV_SECRETS_SECURITY_BIN="$fixture_root/fake-security" \
+  "$repo_root/scripts/with-dev-secrets" TEST_DEV_SECRET -- \
+  /bin/sh -c 'test "$TEST_DEV_SECRET" = fixture-value'
+if DEV_SECRETS_SECURITY_BIN="$fixture_root/fake-security" \
+  "$repo_root/scripts/with-dev-secrets" 'INVALID-NAME' -- /usr/bin/true >/dev/null 2>&1; then
+  printf '%s\n' 'secret helper accepted an invalid variable name' >&2
+  exit 1
+fi
+pass "subprocess-only Keychain helper"
+
+"$repo_root/scripts/repo-guard" --tree HEAD >/dev/null
+pass "public repository credential guard"
+
+guard_fixture="$fixture_root/guard-repo"
+mkdir -p "$guard_fixture/.githooks" "$guard_fixture/scripts"
+cp "$repo_root/.githooks/pre-push" "$guard_fixture/.githooks/pre-push"
+cp "$repo_root/scripts/repo-guard" "$guard_fixture/scripts/repo-guard"
+chmod 755 "$guard_fixture/.githooks/pre-push" "$guard_fixture/scripts/repo-guard"
+git -C "$guard_fixture" init -q
+git -C "$guard_fixture" config user.name fixture
+git -C "$guard_fixture" config user.email fixture@example.invalid
+printf '%s\n' safe > "$guard_fixture/example.txt"
+git -C "$guard_fixture" add example.txt
+git -C "$guard_fixture" commit -qm initial
+guard_base="$(git -C "$guard_fixture" rev-parse HEAD)"
+secret_name='ANTHROPIC_API_KEY'
+printf 'export %s=%s\n' "$secret_name" fixture-test-value > "$guard_fixture/example.txt"
+git -C "$guard_fixture" commit -qam add-secret
+printf '%s\n' safe-again > "$guard_fixture/example.txt"
+git -C "$guard_fixture" commit -qam remove-secret
+guard_head="$(git -C "$guard_fixture" rev-parse HEAD)"
+if printf 'refs/heads/main %s refs/heads/main %s\n' "$guard_head" "$guard_base" | \
+    git -C "$guard_fixture" hook run pre-push origin fixture >/dev/null 2>&1; then
+  printf '%s\n' 'pre-push guard ignored a credential in outgoing history' >&2
+  exit 1
+fi
+pass "public repository outgoing-history guard"
+
+GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$repo_root/git/config" \
+  git init -q "$fixture_root/git-fixture"
+test "$(git -C "$fixture_root/git-fixture" branch --show-current)" = "main"
+test "$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$repo_root/git/config" git config --global --get pull.ff)" = "only"
+pass "Git defaults"
+
+wezterm --config-file "$repo_root/wezterm/wezterm.lua" show-keys --lua >/dev/null
+pass "WezTerm config"
+
+tmux -L "$tmux_socket" -f "$repo_root/tmux/tmux.conf" new-session -d -s config-test
+test "$(tmux -L "$tmux_socket" show-options -gv prefix)" = "C-Space"
+test "$(tmux -L "$tmux_socket" show-options -gv @resurrect-pane-contents-area)" = "visible"
+test "$(tmux -L "$tmux_socket" show-options -gv @resurrect-delete-backup-after)" = "14"
+pass "isolated tmux config"
+
+mkdir -p "$fixture_root/tmux-data/tmux/resurrect/child"
+printf '%s\n' 'fixture' > "$fixture_root/tmux-data/tmux/resurrect/state"
+chmod 755 "$fixture_root/tmux-data/tmux/resurrect" "$fixture_root/tmux-data/tmux/resurrect/child"
+chmod 644 "$fixture_root/tmux-data/tmux/resurrect/state"
+HOME="$fixture_home" XDG_DATA_HOME="$fixture_root/tmux-data" "$repo_root/scripts/tmux-secure-resurrect"
+test "$(stat -f %Lp "$fixture_root/tmux-data/tmux/resurrect")" = "700"
+test "$(stat -f %Lp "$fixture_root/tmux-data/tmux/resurrect/state")" = "600"
+pass "tmux persistence permissions"
+
+mkdir -p "$fixture_root/hostile-session"
+printf '%s\n' "call writefile(['unexpected'], 'executed')" > "$fixture_root/hostile-session/.session.vim"
+(
+  cd "$fixture_root/hostile-session"
+  nvim --headless '+qa' >/dev/null 2>&1
+)
+test ! -e "$fixture_root/hostile-session/executed"
+nvim --headless "+lua assert(vim.fn.exists(':SessionLoad') == 2)" '+qa' >/dev/null 2>&1
+! rg -n 'kitty @|source .*\.session\.vim' "$repo_root/nvim" --glob '*.lua' >/dev/null
+pass "Neovim startup and hidden-session boundary"
+
+printf '%s\n' \
+  '[projects.fixture]' \
+  "path = \"$fixture_root/git-fixture\"" \
+  'layout = "engineering"' \
+  'sync = "none"' \
+  'startup = []' > "$fixture_root/projects.toml"
+WORK_PROJECTS_FILE="$fixture_root/projects.toml" WORK_TMUX_SOCKET="$work_socket" WORK_TEST_MODE=1 \
+  "$repo_root/scripts/work" fixture --no-attach >/dev/null
+test "$(tmux -L "$work_socket" list-windows -t '=fixture' -F '#{window_name}' | paste -sd ',' -)" = "code,run,shell"
+test "$(tmux -L "$work_socket" list-panes -t '=fixture:code' | wc -l | tr -d ' ')" = "2"
+WORK_PROJECTS_FILE="$fixture_root/projects.toml" WORK_TMUX_SOCKET="$work_socket" WORK_TEST_MODE=1 \
+  "$repo_root/scripts/work" fixture --no-attach >/dev/null
+test "$(tmux -L "$work_socket" list-windows -t '=fixture' | wc -l | tr -d ' ')" = "3"
+pass "idempotent project session"
+
+pass "all configuration checks"

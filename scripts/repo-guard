@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(git -C "$script_dir/.." rev-parse --show-toplevel)"
+cd "$repo_root"
+
+failures=0
+
+scan_blob() {
+  local path="$1"
+  local object="$2"
+  local lower
+
+  lower="$(printf '%s' "$path" | tr '[:upper:]' '[:lower:]')"
+  case "$lower" in
+    .env|*/.env|.env.*|*/.env.*|*.key|*.pem|*.p12|*.pfx)
+      case "$lower" in
+        .env.example|*/.env.example|.env.template|*/.env.template) ;;
+        *)
+          printf 'repo-guard: blocked credential path: %s\n' "$path" >&2
+          failures=1
+          ;;
+      esac
+      ;;
+  esac
+
+  git cat-file -e "$object" 2>/dev/null || return
+  [[ "$path" == "scripts/repo-guard" ]] && return
+
+  if git cat-file -p "$object" | LC_ALL=C rg --quiet \
+      -e '-----BEGIN (OPENSSH |RSA |EC |DSA |PGP )?PRIVATE KEY-----' \
+      -e 'gh[pousr]_[A-Za-z0-9]{30,}' \
+      -e 'github_pat_[A-Za-z0-9_]{50,}' \
+      -e 'AKIA[0-9A-Z]{16}' \
+      -e 'AIza[0-9A-Za-z_-]{35}' \
+      -e 'sk-(proj-|svcacct-)?[A-Za-z0-9_-]{20,}' \
+      -e 'sk-ant-api[0-9A-Za-z_-]{30,}' \
+      -e '^[[:space:]]*(export[[:space:]]+)?(GITHUB_PERSONAL_ACCESS_TOKEN|GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|ANTHROPIC_API_KEY|GEMINI_API_KEY|CLICKUP_API_TOKEN)=.+'; then
+    printf 'repo-guard: blocked credential-shaped content in: %s\n' "$path" >&2
+    failures=1
+  fi
+}
+
+case "${1:---staged}" in
+  --staged)
+    while IFS= read -r -d '' path; do
+      scan_blob "$path" ":$path"
+    done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+    ;;
+  --tree)
+    [[ "$#" -eq 2 ]] || { printf 'usage: %s --tree COMMIT\n' "$0" >&2; exit 2; }
+    git rev-parse --verify "$2^{commit}" >/dev/null
+    while IFS= read -r -d '' path; do
+      scan_blob "$path" "$2:$path"
+    done < <(git ls-tree -r -z --name-only "$2")
+    ;;
+  *)
+    printf 'usage: %s [--staged | --tree COMMIT]\n' "$0" >&2
+    exit 2
+    ;;
+esac
+
+[[ "$failures" -eq 0 ]] || exit 1
+printf 'repo-guard: PASS\n'

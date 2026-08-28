@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+
+set -u
+umask 077
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+dotfiles_root="$(cd "$script_dir/.." && pwd -P)"
+config_file="$dotfiles_root/symlinks.conf"
+mode="dry-run"
+backup_existing="false"
+backup_stamp="${DOTFILES_LINK_BACKUP_STAMP:-$(date '+%Y%m%dT%H%M%S')}"
+backup_root="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/link-backups/$backup_stamp"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/link-config [--dry-run | --apply] [--backup-existing] [--config FILE]
+
+The default is a dry run. Existing regular files, directories, and incorrect
+symlinks are never removed. With --apply --backup-existing, a conflicting exact
+target is moved into a private timestamped backup before its link is created.
+EOF
+}
+
+info() {
+  printf '%s\n' "$*"
+}
+
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 2
+}
+
+expand_path() {
+  local raw="$1"
+  local suffix
+
+  case "$raw" in
+    "\${DOTFILES_ROOT}"*)
+      suffix="${raw#'${DOTFILES_ROOT}'}"
+      printf '%s%s\n' "$dotfiles_root" "$suffix"
+      ;;
+    "\${HOME}"*)
+      suffix="${raw#'${HOME}'}"
+      printf '%s%s\n' "$HOME" "$suffix"
+      ;;
+    /*)
+      printf '%s\n' "$raw"
+      ;;
+    *)
+      fail "unsupported path expression: $raw"
+      ;;
+  esac
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run)
+      mode="dry-run"
+      ;;
+    --apply)
+      mode="apply"
+      ;;
+    --backup-existing)
+      backup_existing="true"
+      ;;
+    --config)
+      [ "$#" -ge 2 ] || fail "--config requires a file"
+      config_file="$2"
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown option: $1"
+      ;;
+  esac
+  shift
+done
+
+[ -f "$config_file" ] || fail "configuration file not found: $config_file"
+
+# Validate the complete manifest before an apply pass so a malformed later line
+# cannot leave an earlier target partially applied.
+if [ "$mode" = "apply" ] && [ "${DOTFILES_LINK_PREFLIGHT:-0}" != "1" ]; then
+  if [ "$backup_existing" = "true" ]; then
+    DOTFILES_LINK_PREFLIGHT=1 DOTFILES_LINK_BACKUP_STAMP="$backup_stamp" \
+      "$0" --dry-run --backup-existing --config "$config_file" >/dev/null
+  else
+    DOTFILES_LINK_PREFLIGHT=1 DOTFILES_LINK_BACKUP_STAMP="$backup_stamp" \
+      "$0" --dry-run --config "$config_file" >/dev/null
+  fi
+fi
+
+line_number=0
+blocked=0
+planned=0
+seen_targets=""
+
+while IFS=: read -r raw_source raw_target extra || [ -n "${raw_source:-}" ]; do
+  line_number=$((line_number + 1))
+
+  case "${raw_source:-}" in
+    ''|'#'*) continue ;;
+  esac
+
+  if [ -z "${raw_target:-}" ] || [ -n "${extra:-}" ]; then
+    info "REFUSE line $line_number: expected exactly source:target"
+    blocked=$((blocked + 1))
+    continue
+  fi
+
+  source_path="$(expand_path "$raw_source")" || exit 2
+  target_path="$(expand_path "$raw_target")" || exit 2
+
+  case "$source_path:$target_path" in
+    *'/../'*|*'/./'*|*'/..'|*'/.' )
+      info "REFUSE line $line_number: dot path segments are not allowed"
+      blocked=$((blocked + 1))
+      continue
+      ;;
+  esac
+
+  case "$source_path" in
+    "$dotfiles_root"/*) ;;
+    *)
+      info "REFUSE line $line_number: source is outside the dotfiles repository"
+      blocked=$((blocked + 1))
+      continue
+      ;;
+  esac
+
+  case "$target_path" in
+    "$HOME"/*) ;;
+    *)
+      info "REFUSE line $line_number: target is not an exact path below HOME"
+      blocked=$((blocked + 1))
+      continue
+      ;;
+  esac
+
+  case "
+$seen_targets
+" in
+    *"
+$target_path
+"*)
+      info "REFUSE line $line_number: duplicate target: $target_path"
+      blocked=$((blocked + 1))
+      continue
+      ;;
+  esac
+  seen_targets="$seen_targets
+$target_path"
+
+  if [ ! -e "$source_path" ]; then
+    info "REFUSE line $line_number: source does not exist: $source_path"
+    blocked=$((blocked + 1))
+    continue
+  fi
+
+  source_physical="$(realpath "$source_path")" || {
+    info "REFUSE line $line_number: source cannot be resolved: $source_path"
+    blocked=$((blocked + 1))
+    continue
+  }
+  case "$source_physical" in
+    "$dotfiles_root"/*) ;;
+    *)
+      info "REFUSE line $line_number: resolved source escapes the dotfiles repository"
+      blocked=$((blocked + 1))
+      continue
+      ;;
+  esac
+
+  if [ -L "$target_path" ] && [ "$(readlink "$target_path")" = "$source_path" ]; then
+    info "OK $target_path -> $source_path"
+    continue
+  fi
+
+  if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+    if [ "$backup_existing" != "true" ]; then
+      info "REFUSE existing target: $target_path (use --backup-existing with --apply)"
+      blocked=$((blocked + 1))
+      continue
+    fi
+
+    relative_target="${target_path#"$HOME"/}"
+    backup_path="$backup_root/$relative_target"
+
+    if [ -e "$backup_path" ] || [ -L "$backup_path" ]; then
+      info "REFUSE backup collision: $backup_path"
+      blocked=$((blocked + 1))
+      continue
+    fi
+
+    if [ "$mode" = "dry-run" ]; then
+      info "WOULD BACK UP $target_path -> $backup_path"
+      info "WOULD LINK $target_path -> $source_path"
+    else
+      mkdir -p "$(dirname "$backup_path")"
+      mv "$target_path" "$backup_path"
+      mkdir -p "$(dirname "$target_path")"
+      ln -s "$source_path" "$target_path"
+      info "BACKED UP $target_path -> $backup_path"
+      info "LINKED $target_path -> $source_path"
+    fi
+    planned=$((planned + 1))
+    continue
+  fi
+
+  if [ "$mode" = "dry-run" ]; then
+    info "WOULD LINK $target_path -> $source_path"
+  else
+    mkdir -p "$(dirname "$target_path")"
+    ln -s "$source_path" "$target_path"
+    info "LINKED $target_path -> $source_path"
+  fi
+  planned=$((planned + 1))
+done < "$config_file"
+
+if [ "$blocked" -gt 0 ]; then
+  info "Completed with $blocked refused target(s); no refused target was changed."
+  exit 2
+fi
+
+info "Completed $mode: $planned change(s), zero refused targets."

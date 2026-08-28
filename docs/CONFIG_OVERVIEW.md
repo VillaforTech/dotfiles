@@ -14,12 +14,12 @@ GPU-accelerated terminal emulator configured in Lua.
 **Key settings:**
 - **Font:** JetBrains Mono Bold, 12.5pt
 - **Decorations:** RESIZE-only (no title bar, no tab bar)
-- **Default program:** `/bin/zsh -l -c "tmux attach || tmux"` — auto-attaches to an existing tmux session or creates one
+- **Default program:** `/bin/zsh -l` — always reaches a recovery shell; `work <alias>` owns named tmux sessions
 - **Background:** Pure black (`#000000`) with macOS background blur
 - **Keybindings:** `Ctrl+Enter` and `Shift+Enter` send distinct escape sequences for Neovim compatibility
 - **Hyperlink rules:** Clickable URLs in parens, brackets, braces, angle brackets, and bare URLs
 
-**Theme integration:** Reads `WEZTERM_THEME` from shell environment via `printenv`, maps to Gogh scheme names.
+**Theme integration:** Reads `WEZTERM_THEME` directly from the process environment and falls back to Nord without spawning a shell.
 
 ## Zsh (`zsh/`)
 
@@ -27,14 +27,15 @@ Shell configuration split into focused files, loaded by a minimal `.zshrc`.
 
 **Files:**
 - `.zshrc` — Loader that sources `custom.zsh`, `aliases.zsh`, and optional `work.zsh`
-- `.zshenv` — Sets XDG directories, theme env vars (`NVIM_THEME`, `TMUX_THEME`, etc.), `EDITOR=nvim`, build flags (`LDFLAGS`, `CPPFLAGS`), locale, and loads `~/.env` secrets and `~/.cargo/env`
+- `.zshenv` — Minimal XDG and locale state; no PATH probing or project environment loading
+- `.zprofile` — Login PATH, Homebrew shell environment, Cargo, uv, and PostgreSQL tool discovery
 - `custom.zsh` — Shell initialization:
   - **Homebrew** setup at `/opt/homebrew`
   - **uv** shell completion for Python package management
   - **Starship** prompt init with theme palette switching
   - **Git completion** via custom zstyle + fpath
-  - **FZF** with bat preview, hidden file search via ripgrep
-  - **FZF functions:** `fd()` (cd to directory via fzf), `fh()` (search and execute from command history)
+  - **FZF** with bat preview when available and a portable text fallback
+  - **FZF functions:** `cdf()` (cd via the real fd CLI), `fh()` (place history selection on the edit buffer without executing it)
   - **Zoxide** (`z` command — smarter `cd`)
   - **zsh-syntax-highlighting** with path underline disabled
   - **zsh-autosuggestions**
@@ -43,7 +44,9 @@ Shell configuration split into focused files, loaded by a minimal `.zshrc`.
   - **`mkds()`** — Scaffold a data science project with uv (directories, venv, Jupyter, pandas, git init)
 - `aliases.zsh` — 40+ aliases organized by category:
   - **System:** `shutdown`, `restart`, `sleep`, `c` (clear), `e` (exit)
-  - **AI tools:** `cc` (claude), `cx` (codex auto), `cxr` (codex readonly), `cxn` (codex net), `gmc` (gemini sandbox)
+  - **AI tools:** `cx` (Codex with the effective exact-project policy), `cxr`
+    (explicit read-only), and `cxo` (intentional machine-operator mode). `cc`
+    and `gmc` remain compatibility aliases, not peer default agents.
   - **Git (30+ aliases):** Standard shortcuts (`ga`, `gc`, `gp`, `gco`, `gb`, `gd`, `gl`, etc.)
   - **FZF-enhanced git:** `gafzf` (add), `grmfzf` (rm), `grfzf` (restore), `grsfzf` (restore staged), `gcofzf` (checkout branch)
   - **`quick_commit()`** — Commits with ticket ID extracted from branch name (e.g., branch `PROJ-123-feature` → commit `PROJ-123: message`). `gqc` alias, `gqcp` to commit and push.
@@ -51,7 +54,7 @@ Shell configuration split into focused files, loaded by a minimal `.zshrc`.
   - **Navigation:** `ls` → eza with icons, `r` → ranger, `lg` → lazygit, `lv`/`lv2`/`lv3`/`lv4` → go up directories
 - `git-completion.bash` / `git-completion.zsh` — Git tab completion support
 
-**Theme integration:** `.zshenv` is the single source of truth for all theme env vars. Starship palette is set via `starship config palette $STARSHIP_THEME`.
+**Theme integration:** `.zshrc` owns interactive theme variables. Shell startup reads the tracked Starship file but never mutates it.
 
 ## Starship (`starship/`)
 
@@ -60,13 +63,13 @@ Cross-shell prompt with a single config file.
 **Files:**
 - `starship.toml` — Prompt format, module configuration, symbols, and color palettes (Nord and OneDark)
 
-**Theme integration:** Initialized in `custom.zsh`. Palette selected via `starship config palette $STARSHIP_THEME`.
+**Theme integration:** Initialized in `custom.zsh`; the tracked file remains immutable during shell startup.
 
 ## Neovim (`nvim/`)
 
 Lua-based configuration using lazy.nvim as the plugin manager.
 
-**Entry point:** `init.lua` bootstraps lazy.nvim, loads core modules (`options`, `keymaps`, `snippets`), loads `tools/sql-runner`, resolves theme from `NVIM_THEME` env var (default: `nord`), and auto-restores `.session.vim` if present.
+**Entry point:** `init.lua` bootstraps lazy.nvim, loads core modules (`options`, `keymaps`, `snippets`), loads `tools/sql-runner`, and resolves the theme from `NVIM_THEME` (default: `nord`). `.session.vim` is never sourced at startup; `:SessionLoad` invokes Neovim's trust check explicitly.
 
 **Core modules:**
 - `lua/core/options.lua` — Leader key: Space. Tabs: 4 spaces. Relative line numbers. System clipboard sync. Split below/right. No swap/backup files.
@@ -103,8 +106,8 @@ Lua-based configuration using lazy.nvim as the plugin manager.
 | mason.nvim | (dependency) | LSP/tool installer |
 | nvim-cmp | `autocompletion.lua` | Autocompletion with LSP, snippet, buffer, and path sources |
 | LuaSnip | (dependency) | Snippet engine with friendly-snippets |
-| conform.nvim | `conform.lua` | Format on save: stylua (Lua), ruff_fix + ruff_format (Python), prettier (JS/TS/JSON/YAML/MD/HTML), shfmt (Bash), terraform_fmt |
-| nvim-lint | `lint.lua` | Async linting: eslint_d (JS/TS), checkmake (Makefiles) |
+| conform.nvim | `conform.lua` | Dormant spec retained for a later install-and-test decision; not loaded in v1 |
+| nvim-lint | `lint.lua` | Dormant spec retained for a later install-and-test decision; not loaded in v1 |
 | fidget.nvim | (dependency) | LSP progress notifications |
 
 **Configured LSP servers:** `lua_ls`, `basedpyright`, `ruff`, `jsonls`, `sqlls`, `terraformls`, `yamlls`, `bashls`, `dockerls`, `docker_compose_language_service`, `html`, `rust_analyzer` (with clippy as check command)
@@ -170,7 +173,9 @@ Terminal multiplexer configuration.
 - **Status bar:** Top position, 3-second refresh interval
 - **Base index:** 1 (windows and panes start at 1)
 - **Escape time:** 0 (no delay for Neovim ESC)
-- **History:** 1,000,000 lines
+- **History:** 100,000 lines
+- **Pane continuity:** visible pane area only, private file modes, 14-day layout retention
+- **Sensitive mode:** Prefix + `S` toggles pane-content capture without disabling layout saves
 
 **Plugins (via TPM):**
 | Plugin | Purpose |
@@ -196,7 +201,9 @@ Helper scripts for installation and system setup.
 | `prerequisites.sh` | Checks for Xcode Command Line Tools and Homebrew, installs if missing |
 | `brew-install-custom.sh` | Runs `brew bundle` with the Brewfile |
 | `osx-defaults.sh` | Sets macOS system preferences (Dock auto-hide, Finder defaults, key repeat speed, etc.) |
-| `symlinks.sh` | Creates or deletes symlinks based on `symlinks.conf`. Flags: `--create`, `--delete` |
+| `link-config` | Exact-target linker; dry-run by default, refuses conflicts, optional private backup |
+| `symlinks.sh` | Compatibility wrapper; destructive deletion mode is retired |
+| `work` | Resolve a private project registry and create/attach a named three-window tmux session |
 
 ## Homebrew (`homebrew/`)
 

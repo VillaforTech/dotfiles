@@ -1,22 +1,35 @@
-tap "homebrew/bundle"
-tap "homebrew/cask"
-tap "homebrew/core"
 # Library for command-line editing
 brew "readline"
 # Official Amazon AWS command-line interface
 brew "awscli"
 # Cross-platform make
 brew "cmake"
+# Project-scoped environment loader
+brew "direnv"
+# Fast filesystem finder used by interactive search
+brew "fd"
 # Command-line fuzzy finder written in Go
 brew "fzf"
+# JSON processor used by bootstrap and configuration validation
+brew "jq"
+# Syntax-highlighting file viewer used by fzf previews
+brew "bat"
+# Syntax-highlighting pager for Git diffs
+brew "git-delta"
 # GNU compiler collection
 brew "gcc"
+# GitHub command-line client
+brew "gh"
+# Current Git client
+brew "git"
+# Large-file support for repositories that require it
+brew "git-lfs"
 # Ambitious Vim-fork focused on extensibility and agility
 brew "neovim"
-# Fast, highly customisable system info script
-brew "neofetch"
 # Platform built on V8 to build network applications
 brew "node"
+# Fast JavaScript runtime required by the pinned native gstack pilot
+brew "bun"
 # Python package and project manager
 brew "uv"
 # File browser
@@ -25,16 +38,14 @@ brew "ranger"
 brew "ripgrep"
 # Powerful, clean, object-oriented scripting language
 brew "ruby"
-# Safe, concurrent, practical language
-brew "rust"
 # Terminal multiplexer
 brew "tmux"
 # Plugin manager for tmux
 brew "tpm"
-# Access X11 clipboards from the command-line
-brew "xclip"
-# General-purpose lossless data-compression library
-brew "zlib"
+# Bounded cross-language version manager for Node, Go, Java, and Terraform
+brew "mise"
+# Active local relational database owner
+brew "mysql"
 # Fish-like fast/unobtrusive autosuggestions for zsh
 brew "zsh-autosuggestions"
 # Fish shell like syntax highlighting for zsh
@@ -42,25 +53,31 @@ brew "zsh-syntax-highlighting"
 # Cross-shell prompt for astronauts
 brew "starship"
 # Cryptography and SSL/TLS Toolkit
-brew "openssl@3", link: false
-# Object-relational database system
-brew "postgresql@14"
+brew "openssl@3"
 # Command-line interface for SQLite
 brew "sqlite"
 # PDF rendering library (based on the xpdf-3.0 code base)
 brew "poppler"
+# Candidate PostgreSQL owner; v14 is retained only for dump/restore migration
+brew "postgresql@18"
+# Reproducible document conversion for research and technical artifacts
+brew "pandoc"
 # Modern, maintained replacement for ls
 brew "eza"
 # A better cd command
 brew "zoxide"
 # Simple terminal UI for git commands
 brew "lazygit"
+# Portable YAML processor for Kubernetes and configuration work
+brew "yq"
+# Disposable local Kubernetes clusters on Docker Desktop
+brew "kind"
+# Kubernetes package manager
+brew "helm"
 # Application uninstaller
 cask "appcleaner"
-# Web browser focusing on privacy
-cask "brave-browser"
 # App to build and share containerized applications and microservices
-cask "docker"
+cask "docker-desktop"
 # Developer targeted fonts with a high number of glyphs
 cask "font-hack-nerd-font"
 # Developer targeted fonts with a high number of glyphs
@@ -69,13 +86,19 @@ cask "font-jetbrains-mono-nerd-font"
 cask "font-symbols-only-nerd-font"
 # Grammarly for desktop
 cask "grammarly-desktop"
+# Private GitHub knowledge vault and research notes
+cask "obsidian"
+# Minimal window manager
+cask "rectangle"
+# Academic papers, metadata, annotations, and citation exports
+cask "zotero"
 # GPU-accelerated cross-platform terminal emulator and multiplexer
 cask "wezterm"
 # Music streaming service
 cask "spotify"
-# Multimedia player
-cask "vlc"
 # App that enables mouse-free UI interaction
 cask "shortcat"
+# Primary cross-database GUI
+cask "dbeaver-community"
 # Software for Logitech devices
-cask "logi-options-plus"
+cask "logi-options+"

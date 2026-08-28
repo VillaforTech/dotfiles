@@ -1,7 +1,12 @@
 .DS_Store
 .env
+.env.*
+!.env.example
+!.env.template
+.session.vim
 wezterm/*.jpg
 wezterm/*.png
 work.zsh
+work/projects.toml
 *.log
 .nvimlog

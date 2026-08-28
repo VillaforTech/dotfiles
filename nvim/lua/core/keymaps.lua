@@ -60,12 +60,6 @@ vim.keymap.set('n', '<leader>h', '<C-w>s', opts) -- split window horizontally
 vim.keymap.set('n', '<leader>se', '<C-w>=', opts) -- make split windows equal width & height
 vim.keymap.set('n', '<leader>xs', ':close<CR>', opts) -- close current split window
 
--- Navigate between splits
-vim.keymap.set('n', '<C-k>', ':wincmd k<CR>', opts)
-vim.keymap.set('n', '<C-j>', ':wincmd j<CR>', opts)
-vim.keymap.set('n', '<C-h>', ':wincmd h<CR>', opts)
-vim.keymap.set('n', '<C-l>', ':wincmd l<CR>', opts)
-
 -- Tabs
 vim.keymap.set('n', '<leader>to', ':tabnew<CR>', opts) -- open new tab
 vim.keymap.set('n', '<leader>tx', ':tabclose<CR>', opts) -- close current tab
@@ -122,6 +116,31 @@ end, { desc = 'Go to next diagnostic message' })
 vim.keymap.set('n', '<leader>d', vim.diagnostic.open_float, { desc = 'Open floating diagnostic message' })
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostics list' })
 
--- Save and load session
-vim.keymap.set('n', '<leader>ss', ':mksession! .session.vim<CR>', { noremap = true, silent = false })
-vim.keymap.set('n', '<leader>sl', ':source .session.vim<CR>', { noremap = true, silent = false })
+-- Sessions are never sourced during startup. Loading is explicit and uses
+-- Neovim's trust database before any cwd-local commands execute.
+local function cwd_session_file()
+  return vim.fs.joinpath(vim.fn.getcwd(), '.session.vim')
+end
+
+vim.api.nvim_create_user_command('SessionSave', function()
+  vim.cmd('mksession! ' .. vim.fn.fnameescape(cwd_session_file()))
+end, { desc = 'Save the current project session' })
+
+vim.api.nvim_create_user_command('SessionLoad', function()
+  local session_file = cwd_session_file()
+  if vim.fn.filereadable(session_file) ~= 1 then
+    vim.notify('No .session.vim in the current directory', vim.log.levels.WARN)
+    return
+  end
+
+  local session = vim.secure.read(session_file)
+  if not session then
+    vim.notify('Session was not trusted; nothing was executed', vim.log.levels.WARN)
+    return
+  end
+
+  vim.cmd(session)
+end, { desc = 'Load a trusted project session explicitly' })
+
+vim.keymap.set('n', '<leader>ss', '<cmd>SessionSave<CR>', { desc = 'Session: save' })
+vim.keymap.set('n', '<leader>sl', '<cmd>SessionLoad<CR>', { desc = 'Session: load trusted file' })

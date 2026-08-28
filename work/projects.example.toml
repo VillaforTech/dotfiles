@@ -1,0 +1,9 @@
+# Copy this file to ~/.config/work/projects.toml, set mode 0600, and register
+# only exact project roots. `startup` is reserved for a future reviewed hook
+# schema and is not executed by scripts/work.
+
+[projects.example]
+path = "~/Developer/example"
+layout = "engineering"
+sync = "ff-only"
+startup = []

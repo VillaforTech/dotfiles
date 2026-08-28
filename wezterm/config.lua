@@ -64,5 +64,7 @@ config.hyperlink_rules = {
 		highlight = 1,
 	},
 }
-config.default_prog = { "/bin/zsh", "-l", "-c", "tmux attach || tmux" }
+-- Project sessions are created explicitly by `work <alias>`. A broken tmux
+-- config must never prevent a terminal window from reaching a recovery shell.
+config.default_prog = { "/bin/zsh", "-l" }
 return config

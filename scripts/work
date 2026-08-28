@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+
+set -eu
+
+registry="${WORK_PROJECTS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/work/projects.toml}"
+operator="false"
+attach="true"
+sync_enabled="true"
+
+usage() {
+  cat <<'EOF'
+Usage: work <project> [--operator] [--no-sync] [--no-attach]
+
+Open or attach to a deterministic three-window tmux session for a registered
+project. --operator starts the Codex pane with explicit machine-operator flags.
+EOF
+}
+
+fail() {
+  printf 'work: %s\n' "$*" >&2
+  exit 2
+}
+
+[ "$#" -gt 0 ] || { usage; exit 2; }
+project="$1"
+shift
+
+case "$project" in
+  *[!A-Za-z0-9_-]*|'') fail "project aliases may contain only letters, numbers, _ and -" ;;
+esac
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --operator) operator="true" ;;
+    --no-sync) sync_enabled="false" ;;
+    --no-attach) attach="false" ;;
+    --help|-h) usage; exit 0 ;;
+    *) fail "unknown option: $1" ;;
+  esac
+  shift
+done
+
+[ -r "$registry" ] || fail "project registry is not readable: $registry"
+
+project_record="$({ awk -v wanted="$project" '
+  function value(line) {
+    sub(/^[^=]*=[[:space:]]*/, "", line)
+    sub(/^"/, "", line)
+    sub(/"[[:space:]]*$/, "", line)
+    return line
+  }
+  $0 == "[projects." wanted "]" { inside = 1; found = 1; next }
+  /^\[/ { inside = 0 }
+  inside && /^[[:space:]]*path[[:space:]]*=/ { path = value($0) }
+  inside && /^[[:space:]]*layout[[:space:]]*=/ { layout = value($0) }
+  inside && /^[[:space:]]*sync[[:space:]]*=/ { sync = value($0) }
+  END {
+    if (!found || path == "") exit 1
+    if (layout == "") layout = "engineering"
+    if (sync == "") sync = "none"
+    printf "%s\t%s\t%s\n", path, layout, sync
+  }
+' "$registry"; } 2>/dev/null)" || fail "project is not registered: $project"
+
+IFS=$'\t' read -r project_path layout sync_policy <<< "$project_record"
+case "$project_path" in
+  '~/'*) project_path="$HOME/${project_path#'~/'}" ;;
+  /*) ;;
+  *) fail "registered path must be absolute or begin with ~/: $project" ;;
+esac
+
+[ -d "$project_path" ] || fail "registered project path does not exist: $project_path"
+project_root="$(cd "$project_path" && pwd -P)"
+
+printf 'Project: %s\nRoot: %s\n' "$project" "$project_root"
+if git -C "$project_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git -C "$project_root" status --short --branch
+
+  if [ "$sync_enabled" = "true" ] && [ "$sync_policy" = "ff-only" ]; then
+    if [ -n "$(git -C "$project_root" status --porcelain)" ]; then
+      printf '%s\n' 'Sync skipped: working tree is dirty.'
+    elif git -C "$project_root" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+      git -C "$project_root" fetch --prune
+      git -C "$project_root" merge --ff-only '@{upstream}'
+    else
+      printf '%s\n' 'Sync skipped: current branch has no upstream.'
+    fi
+  fi
+fi
+
+tmux_command=(tmux)
+if [ -n "${WORK_TMUX_SOCKET:-}" ]; then
+  tmux_command+=( -L "$WORK_TMUX_SOCKET" )
+fi
+
+if ! "${tmux_command[@]}" has-session -t "=$project" 2>/dev/null; then
+  if [ "${WORK_TEST_MODE:-0}" = "1" ]; then
+    editor_command=(/bin/zsh)
+    agent_command=(/bin/zsh)
+  else
+    editor_command=(nvim)
+    if [ "$operator" = "true" ]; then
+      agent_command=(codex --sandbox danger-full-access --ask-for-approval on-request)
+    else
+      agent_command=(codex)
+    fi
+  fi
+
+  "${tmux_command[@]}" new-session -d -s "$project" -n code -c "$project_root" "${editor_command[@]}"
+  "${tmux_command[@]}" split-window -h -t "=$project:code" -c "$project_root" "${agent_command[@]}"
+  "${tmux_command[@]}" new-window -d -t "=$project:" -n run -c "$project_root" /bin/zsh
+  "${tmux_command[@]}" split-window -v -t "=$project:run" -c "$project_root" /bin/zsh
+  "${tmux_command[@]}" new-window -d -t "=$project:" -n shell -c "$project_root" /bin/zsh
+  "${tmux_command[@]}" select-window -t "=$project:code"
+fi
+
+if [ "$attach" = "true" ]; then
+  if [ -n "${TMUX:-}" ]; then
+    "${tmux_command[@]}" switch-client -t "=$project"
+  else
+    exec "${tmux_command[@]}" attach-session -t "=$project"
+  fi
+fi
+
+printf 'Session ready: %s (%s layout)\n' "$project" "$layout"
